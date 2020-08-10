@@ -1,7 +1,2 @@
-*.ss~
-*.ss#*
-.#*.ss
-
-*.scm~
-*.scm#*
-.#*.scm
+# Google App Engine generated folder
+appengine-generated/

@@ -1,0 +1,15 @@
+#Kafka service list
+kafka:
+  - 127.0.0.1:9092
+
+#Pusher theme.
+#That only supports configuring one theme
+topic: test_app
+
+#Request rate, in seconds
+rate_limit: 10
+
+#Command point for push messages
+cmds:
+  - cmd: aync_big_account
+    st: true  #Command point status, it can be true or false

@@ -1,0 +1,19 @@
+#Application service protocol http or https
+protocol: http
+
+#Application Service name
+name: test
+
+#Command point corresponding to service application
+cmd: aync_big_account
+
+#Service resource address
+path: /api/test
+
+#Service acquisition form
+server_type: HOST
+
+#Service list
+servers:
+  - 127.0.0.1:8088
+  - 127.0.0.1:8088

@@ -1,0 +1,55 @@
+#Kafka service list
+kafka:
+  - 127.0.0.1:9092
+
+#Zookeeper service list
+zookeeper:
+  - 127.0.0.1:2181
+
+#Zookeeper service
+redis: 127.0.0.1:6379
+
+#Puller theme.
+#That only supports configuring one theme
+topic: test_app
+
+#Puller group name.
+#It needs to be unique, multiple consumers share a group
+group_name: test_app
+
+#Message consumption mode.
+#You can choose the mode 0 or 1.
+#0: consumption information from the beginning 1: consumption from the latest message record
+msg_consum_mode: 1
+
+#The failed message will be saved to zookeeper.
+#If the save fails, it will retry zk_retry_times times.
+#You can change the number of retries through this parameter
+zk_retry_times: 3
+
+#The rate of message consumption.
+#It will limit your message consumption rate.
+#If necessary, you can increase this value, but it is not recommended to be too large,it will cause service pressure
+wnd: 12
+
+#Message submission mode, the mode can be 0 or 1.
+#0:Blocking submission. If the submission of the previous message fails, the next message will not be submitted.
+#In this mode, multiple messages with different delays will be congested, which may cause panic disasters.
+#It is recommended that in this mode, try to ensure that the same message received by the same puller has the same delay time.
+
+#1:Non-blocking submission. In this mode, there will be no guarantee that the consumption of failed messages will continue to retry.
+msg_commit_mode: 0
+
+#Message delay time, in units of seconds.
+#It will allow your message to be delayed in consumption
+msg_delay_able: 1
+
+#The size of the time wheel, which acts on the message delay
+time_wheel_size: 10
+
+#The offset of the message is automatically submitted time
+offset_ct_time: 1
+
+#Consumer application list
+services:
+  - test-app.yml
