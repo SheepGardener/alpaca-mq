@@ -68,7 +68,7 @@ func (p *Pusher) pack(message *Kmessage) (*sarama.ProducerMessage, error) {
 		msg.Key = sarama.ByteEncoder(message.HashKey)
 	}
 
-	msg.Value = sarama.ByteEncoder(string(msgJson))
+	msg.Value = sarama.ByteEncoder(byteToString(msgJson))
 
 	return msg, nil
 }
@@ -117,7 +117,7 @@ func (p *Pusher) Push(message *Kmessage) error {
 			if err != nil {
 				return err
 			}
-			p.logger.WithFields(Fields{"offset": suc.Offset, "partition": suc.Partition, "data": string(bytes), "LogId": message.LogId}).Info("Send Message")
+			p.logger.WithFields(Fields{"offset": suc.Offset, "partition": suc.Partition, "data": byteToString(bytes), "LogId": message.LogId}).Info("Send Message")
 			return nil
 		case fail := <-p.pue.Errors():
 			return fail.Err

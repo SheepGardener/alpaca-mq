@@ -3,7 +3,6 @@ package alpaca
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -138,33 +137,4 @@ func (l *Logger) getTimeStr(timeForm time.Duration) string {
 
 	return fmt.Sprintf("%04d%02d%02d%02d%02d%02d",
 		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
-}
-
-func (l *Logger) GetLogId() string {
-
-	machineId := os.Getpid()
-	datacenterId := machineId + 1
-	curTimeStamp := time.Now().UnixNano() / 1000000
-
-	if curTimeStamp == l.lastTimeStamp {
-
-		if l.seq > 4095 {
-			time.Sleep(time.Millisecond)
-			curTimeStamp = time.Now().UnixNano() / 1000000
-			l.seq = 0
-		}
-
-	} else {
-		l.seq = 0
-	}
-
-	l.seq++
-
-	l.lastTimeStamp = curTimeStamp
-
-	curTimeStamp = curTimeStamp << 22
-	machineId = machineId << 17
-	datacenterId = datacenterId << 12
-
-	return strconv.Itoa(int(curTimeStamp) | machineId | datacenterId | l.seq)
 }

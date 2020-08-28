@@ -36,7 +36,7 @@ type GPullerConfig struct {
 	MsgCmtMode    int8     `yaml:"msg_commit_mode"`
 	MsgDelayAble  int8     `yaml:"msg_delay_able"`
 	OffsetCtTime  int32    `yaml:"offset_ct_time"`
-	TimeWheelSize int      `yaml:"time_wheel_size"`
+	TimeWheelSize int32    `yaml:"time_wheel_size"`
 	Wnd           int32    `yaml:"wnd"`
 	GroupName     string   `yaml:"group_name"`
 	Topic         string   `yaml:"topic"`

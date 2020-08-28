@@ -56,17 +56,17 @@ func (h *HttpRequest) Post(url string, data string, LogId string) error {
 	err1 := json.Unmarshal(respBody, &response)
 
 	if err1 != nil {
-		h.logger.WithFields(Fields{"method": "POST", "url": url, "data": data, "http_status": statuscode, "response": string(respBody), "logId": LogId}).Warnf("Response Decode Failed Err:%s", err1)
+		h.logger.WithFields(Fields{"method": "POST", "url": url, "data": data, "http_status": statuscode, "response": byteToString(respBody), "logId": LogId}).Warnf("Response Decode Failed Err:%s", err1)
 		return err1
 	}
 
 	errno, _ := response["errno"].(int)
 
 	if errno != 0 {
-		h.logger.WithFields(Fields{"method": "POST", "url": url, "data": data, "http_status": statuscode, "response": string(respBody), "logId": LogId}).Warn("Request Error Errno Not 0")
+		h.logger.WithFields(Fields{"method": "POST", "url": url, "data": data, "http_status": statuscode, "response": byteToString(respBody), "logId": LogId}).Warn("Request Error Errno Not 0")
 		return errors.New("Request failed!")
 	}
 
-	h.logger.WithFields(Fields{"method": "POST", "url": url, "data": data, "http_status": statuscode, "response": string(respBody), "logId": LogId}).Info("Request Success")
+	h.logger.WithFields(Fields{"method": "POST", "url": url, "data": data, "http_status": statuscode, "response": byteToString(respBody), "logId": LogId}).Info("Request Success")
 	return nil
 }

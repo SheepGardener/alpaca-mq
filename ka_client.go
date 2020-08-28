@@ -1,16 +1,18 @@
 package alpaca
 
-import "github.com/Shopify/sarama"
+import (
+	"time"
+
+	"github.com/Shopify/sarama"
+)
 
 type KaClient struct {
 	clt sarama.Client
 }
 
-func NewKaClient(topic string, gname string, servers []string) (*KaClient, error) {
+func NewKaClient(topic string, gname string, servers []string, cfg *PullConfig) (*KaClient, error) {
 
-	cfg := sarama.NewConfig()
-
-	client, err := sarama.NewClient(servers, cfg)
+	client, err := sarama.NewClient(servers, &cfg.Config.Config)
 
 	if err != nil {
 		return nil, err
@@ -26,6 +28,11 @@ func (o *KaClient) topics() ([]string, error) {
 func (o *KaClient) partitions(topic string) ([]int32, error) {
 	return o.clt.Partitions(topic)
 }
+
+func (o *KaClient) getOffset(topic string, partition int32) (int64, error) {
+	return o.clt.GetOffset(topic, partition, time.Now().Unix())
+}
+
 func (o *KaClient) getNextOffset(topic string, gname string, partition int32) (int64, error) {
 
 	ofm, err := sarama.NewOffsetManagerFromClient(gname, o.clt)

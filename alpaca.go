@@ -44,6 +44,7 @@ func NewPullerConfig(gcf *GPullerConfig) *PullConfig {
 
 	conf.Config.Config.Consumer.Offsets.CommitInterval = time.Duration(gcf.OffsetCtTime) * time.Second
 
+	// conf.Config.Config.Version = sarama.V2_5_0_0
 	if gcf.Cmode == 1 {
 		conf.Config.Config.Consumer.Offsets.Initial = sarama.OffsetNewest
 	} else {

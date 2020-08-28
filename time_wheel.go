@@ -28,21 +28,27 @@ type Tmsg struct {
 	amg *AlpaceMsg
 }
 
-func NewTimeWheel(bucketNum int) (*TimeWheel, error) {
+const (
+	maxBuketSize = 1 << 20
+)
+
+func NewTimeWheel(bucketNum int32) (*TimeWheel, error) {
 
 	if bucketNum <= 0 {
 		return nil, errors.New("Invalid bukectNum")
 	}
 
+	bNum := vBsize(bucketNum)
+
 	tw := &TimeWheel{
 		tdura:    time.Second,
 		curPos:   0,
-		bnum:     bucketNum,
-		buckets:  make([]*bucket, bucketNum),
+		bnum:     bNum,
+		buckets:  make([]*bucket, bNum),
 		stopChan: make(chan bool),
 	}
 
-	for i := 0; i < bucketNum; i++ {
+	for i := 0; i < bNum; i++ {
 		tw.buckets[i] = &bucket{mglist: list.New()}
 	}
 
@@ -65,6 +71,10 @@ func (b *bucket) first() *list.Element {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.mglist.Front()
+}
+
+func (b *bucket) len() int {
+	return b.mglist.Len()
 }
 
 func (t *TimeWheel) addAmsg(amg *AlpaceMsg) {
@@ -93,7 +103,7 @@ func (t *TimeWheel) getPnturns(delay time.Duration) (int, int) {
 
 	turns := int(diff / t.bnum)
 
-	pos := (t.curPos + diff) % t.bnum
+	pos := (t.curPos + diff) & (t.bnum - 1)
 
 	return pos, turns
 }
@@ -103,14 +113,37 @@ func (t *TimeWheel) start() <-chan time.Time {
 	t.run = true
 	return t.ticker.C
 }
+
 func (t *TimeWheel) stop() {
 	t.stopChan <- true
 	t.run = false
 }
+
 func (t *TimeWheel) cpos() int {
 	return t.curPos
 }
 
 func (t *TimeWheel) inrcPos() {
-	t.curPos = (t.curPos + 1) % t.bnum
+	t.curPos = (t.curPos + 1) & (t.bnum - 1)
+}
+
+func (t *TimeWheel) state() bool {
+	return t.run
+}
+
+func (t *TimeWheel) getBuckets() []*bucket {
+	return t.buckets
+}
+
+func vBsize(tbnum int32) int {
+	u := tbnum - 1
+	u |= u >> 1
+	u |= u >> 2
+	u |= u >> 4
+	u |= u >> 8
+	u |= u >> 16
+	if int(u+1) > maxBuketSize {
+		return maxBuketSize
+	}
+	return int(u + 1)
 }

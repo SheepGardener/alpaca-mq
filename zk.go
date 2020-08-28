@@ -1,6 +1,8 @@
 package alpaca
 
 import (
+	"log"
+	"os"
 	"time"
 
 	"github.com/samuel/go-zookeeper/zk"
@@ -13,6 +15,11 @@ type Zk struct {
 }
 
 func NewZk(Servers []string, timeout time.Duration) (*Zk, error) {
+
+	logger := log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile)
+
+	zk.WithLogger(logger)
+
 	conn, _, err := zk.Connect(Servers, timeout)
 	if err != nil {
 		return nil, err

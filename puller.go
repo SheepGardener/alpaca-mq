@@ -15,10 +15,16 @@ import (
 )
 
 type Puller struct {
-	logger       *Logger
-	zk           *Zk
-	apps         map[string]App
-	pom          *Consumer
+	logger *Logger
+
+	//zk customer service, failure and abnormal messages will be delivered to zk
+	zk *Zk
+
+	apps map[string]App
+
+	//The consumer of the message will also submit the message offset, and sometimes it will rebalacne
+	pom *Consumer
+
 	topic        string
 	gname        string
 	lock         sync.Mutex
@@ -26,10 +32,17 @@ type Puller struct {
 	zkRetryTimes int32
 	wnd          chan bool
 	mdelay       int8
-	tw           *TimeWheel
-	kac          *KaClient
-	ofts         map[int32]int64
-	zksavePath   map[int32]string
+
+	//The realization of the time wheel, delayed messages will be processed accordingly,
+	//he provides polling of time slices,
+	//and stores a large number of messages at the same time
+	tw *TimeWheel
+
+	//Kafka client, it will provide the initial offset so that the offset submission can be guaranteed
+	kac        *KaClient
+	ofts       map[int32]int64
+	zksavePath map[int32]string
+	reFlag     bool
 }
 
 func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
@@ -40,13 +53,15 @@ func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
 		lg.Fatalf("Init Zookeeper Server failed, err:%s", err)
 	}
 
-	pom, err := InitConsumer(cg.Topic, cg.GroupName, NewPullerConfig(cg))
+	cfg := NewPullerConfig(cg)
+
+	pom, err := InitConsumer(cg.Topic, cg.GroupName, cfg)
 
 	if err != nil {
 		lg.Fatalf("Init Consumer Failed Err:%s", err)
 	}
 
-	client, err := NewKaClient(cg.Topic, cg.GroupName, cg.Kafka)
+	client, err := NewKaClient(cg.Topic, cg.GroupName, cg.Kafka, cfg)
 
 	if err != nil {
 		lg.Fatalf("Init KaClient Failed Err:%s", err)
@@ -73,6 +88,7 @@ func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
 		ofts:         make(map[int32]int64),
 		zksavePath:   make(map[int32]string),
 		tw:           tw,
+		reFlag:       false,
 	}
 }
 
@@ -83,6 +99,7 @@ func (p *Puller) handleError() {
 	}
 }
 
+//After receiving rebanlance, clean up the old data and initialize the new data
 func (p *Puller) handleRebalanceNotify() {
 
 	for ntf := range p.pom.Notifications() {
@@ -92,6 +109,11 @@ func (p *Puller) handleRebalanceNotify() {
 		tp := p.pom.Subscriptions()
 
 		if len(tp) > 0 {
+
+			//Check whether the rebalance initialization operation is required
+			if len(p.ofts) > 0 {
+				p.rebalance()
+			}
 
 			pls, ok := tp[p.topic]
 
@@ -108,6 +130,33 @@ func (p *Puller) handleRebalanceNotify() {
 			p.logger.Info("The consumption partition is instantiated successfully")
 		}
 	}
+}
+
+// When consumer-managed partitions are reallocated,
+// resources that no longer exist will be recycled
+func (p *Puller) rebalance() {
+
+	p.reFlag = true
+
+	p.ofts = make(map[int32]int64)
+
+	p.zksavePath = make(map[int32]string)
+
+	if p.tw.state() {
+		p.tw.stop()
+	}
+
+	//Clear the old message data in the original time wheel to prevent it from affecting other consumers
+	bks := p.tw.getBuckets()
+
+	for _, bk := range bks {
+
+		for bk.len() > 0 {
+			bk.del(bk.first())
+		}
+	}
+
+	go p.twLoop()
 }
 
 func (p *Puller) init(pls []int32) {
@@ -152,6 +201,8 @@ func (p *Puller) init(pls []int32) {
 	}
 }
 
+//Delay queue, as time progresses, delayed messages will be processed gradually
+//Just like a clock, walking in circles
 func (p *Puller) twLoop() {
 
 	for {
@@ -185,9 +236,11 @@ func (p *Puller) twLoop() {
 		}
 	}
 }
+
 func (p *Puller) GetLogger() *Logger {
 	return p.logger
 }
+
 func (p *Puller) Pull() {
 
 	go p.twLoop()
@@ -200,9 +253,13 @@ func (p *Puller) Pull() {
 
 		msg := <-p.pom.Recv()
 
+		if p.reFlag {
+			continue
+		}
+
 		p.wnd <- true
 
-		p.logger.WithFields(Fields{"message": string(msg.Value), "parition": msg.Partition, "offset": msg.Offset}).Info("Receive Message")
+		p.logger.WithFields(Fields{"message": byteToString(msg.Value), "parition": msg.Partition, "offset": msg.Offset}).Info("Receive Message")
 
 		kmsg := Kmessage{}
 
@@ -210,7 +267,7 @@ func (p *Puller) Pull() {
 
 		if err != nil {
 
-			p.logger.WithFields(Fields{"message": string(msg.Value), "parition": msg.Partition, "offset": msg.Offset}).Warnf("Json Unmarchar Error:%s", err)
+			p.logger.WithFields(Fields{"message": byteToString(msg.Value), "parition": msg.Partition, "offset": msg.Offset}).Warnf("Json Unmarchar Error:%s", err)
 
 			go p.smsg(msg)
 
@@ -242,7 +299,15 @@ func (p *Puller) cmtOft(part int32, offset int64) error {
 	oft, ok := p.ofts[part]
 
 	if !ok {
-		fmt.Println(111111)
+		return nil
+	}
+
+	//At startup, if there is no recently submitted offset, it will return -1 or -2
+	//Will cause the offset of the message to be submitted ahead of time
+	//Need to pay attention to the processing of subsequent offsets
+	if oft < 0 {
+		p.ofts[part] = offset
+		p.pom.MarkOffset(p.topic, part, offset, p.gname)
 		return nil
 	}
 
@@ -259,6 +324,7 @@ func (p *Puller) cmtOft(part int32, offset int64) error {
 			return nil
 		}
 
+		//To ensure that the message is not lost, and accurate consumption
 		if oft+1 != offset {
 			return errors.New("Offset Not Equal NextOffset")
 		}
@@ -273,45 +339,56 @@ func (p *Puller) cmtOft(part int32, offset int64) error {
 
 func (p *Puller) proc(almsg *AlpaceMsg) {
 
+	if p.reFlag {
+		return
+	}
+
 	<-p.wnd
 
 	go p.callap(almsg)
 
 }
+
 func (p *Puller) callap(almsg *AlpaceMsg) {
 
+	isRes := false
+
 	for {
 
-		if err := p.hmsg(almsg.kmsg); err != nil {
-			p.logger.WithFields(Fields{"logId": almsg.kmsg.LogId, "message": fmt.Sprintf("%+v", almsg)}).Warnf("HanleMessag Failed err:%s", err)
-			time.Sleep(1 * time.Second)
-			continue
+		if p.reFlag {
+			return
 		}
 
-		go p.handleOft(almsg)
+		if !isRes {
 
-	}
-}
+			err := p.hmsg(almsg.kmsg)
 
-func (p *Puller) handleOft(almsg *AlpaceMsg) {
+			if err != nil {
+				p.logger.WithFields(Fields{"logId": almsg.kmsg.LogId, "message": fmt.Sprintf("%+v", almsg)}).Warnf("HanleMessag Failed err:%s", err)
+				continue
+			}
 
-	for {
+			isRes = true
+		}
 
 		err := p.cmtOft(almsg.part, almsg.oft)
 
-		if err != nil {
-			p.logger.WithFields(Fields{"partition:": almsg.part, "offsert": almsg.oft}).Warnf("CommitOffset Failed Err:%s", err)
-			break
+		if err == nil {
+			p.logger.WithFields(Fields{"logId": almsg.kmsg.LogId, "message": fmt.Sprintf("%+v", almsg)}).Info("Message Consumer Success")
+			return
 		}
 
-		time.Sleep(150 * time.Millisecond)
+		p.logger.WithFields(Fields{"partition:": almsg.part, "offsert": almsg.oft}).Warnf("CommitOffset Failed Err:%s", err)
+
+		time.Sleep(100 * time.Millisecond)
 	}
-
-	p.logger.WithFields(Fields{"logId": almsg.kmsg.LogId, "message": fmt.Sprintf("%+v", almsg)}).Info("Message Consumer Success")
-
 }
 
 func (p *Puller) sDly(msg *AlpaceMsg) {
+
+	if p.reFlag {
+		return
+	}
 
 	<-p.wnd
 
@@ -355,6 +432,7 @@ func (p *Puller) hmsg(Kmsg Kmessage) error {
 	return httpRequest.Post(url, Kmsg.Data, Kmsg.LogId)
 }
 
+//Abnormal messages will be saved to zookeeper to help us quickly restore and replay data
 func (p *Puller) smsg(message *sarama.ConsumerMessage) {
 
 	pth, ok := p.zksavePath[message.Partition]
