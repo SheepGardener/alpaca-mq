@@ -126,6 +126,41 @@ The message is transmitted in the form of alpaca.Kmessage
 
 ```
 
+# Personalise
+Alpace implements message processing and service load balancing strategy by default. If you want to customize your own message processing and load balancing strategy, you can implement it in the following custom ways
+
+```
+	// Custom message processing implementation
+	type customizeHandleMessage struct {
+		...Implement your own logic
+	}
+
+	func (c *customizeHandleMessage) MessageHandle(url stirng, msg *alpaca.Kmessage) {
+		...Implement your own logic
+	}
+
+	//Register message handler
+	handlemsg := &customizeHandleMessage{}
+	pull.SetMessageHandle(handlemsg)
+
+	**********************************************************************************
+
+
+	// Implement a custom service load balancing strategy
+	type customizeServerSelector struct {
+		...Implement your own logic
+	}
+
+	func (c *customizeServerSelector) GetAppUrl(ap App) {
+			...Implement your own logic
+	}
+
+	//Register service load balancing selector
+	selector := &customizeServerSelector{}
+	pull.SetServerSelect(selector)
+
+```
+
 # Notes
 
 - Service request succeeded, The condition for the puller request service to be successful is that the requested service needs to return 200 and the return parameter exists errno and is 0

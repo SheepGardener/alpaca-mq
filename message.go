@@ -9,7 +9,7 @@ type Kmessage struct {
 }
 
 type AlpaceMsg struct {
-	kmsg Kmessage
+	kmsg *Kmessage
 	part int32
 	oft  int64
 }

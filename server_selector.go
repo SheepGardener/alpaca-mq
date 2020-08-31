@@ -5,10 +5,14 @@ import (
 	"time"
 )
 
-type Server interface {
+// Service load balancing strategy is implemented,
+// select service and return, App structure will be returned
+type ServerSelector interface {
 	GetAppUrl(ap App) string
 }
 
+// Sequentially polling and returning services to ensure that every service has been called,
+// but it cannot remove abnormal services
 type RoundRobin struct {
 	cmaps map[string]*CurrMap
 }
@@ -49,6 +53,8 @@ func (r *RoundRobin) GetAppUrl(ap App) string {
 	return AssembleApUrl(ap.Protocol, host, ap.Path)
 }
 
+//Randomly select a service to return,
+//sometimes its randomness is not always correct
 type RandomSelect struct {
 }
 

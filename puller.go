@@ -42,7 +42,9 @@ type Puller struct {
 	zksavePath map[int32]string
 	reFlag     bool
 
-	selector Server
+	selector ServerSelector
+
+	hdle MessageHandle
 }
 
 func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
@@ -73,7 +75,7 @@ func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
 		lg.Fatalf("Init TimeWheel Failed Err:%s", err)
 	}
 
-	var rs Server
+	var rs ServerSelector
 
 	if cg.LoadBMode == 1 {
 		rs = NewRoundRobin(aplist)
@@ -98,6 +100,7 @@ func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
 		tw:           tw,
 		reFlag:       false,
 		selector:     rs,
+		hdle:         NewMsgHandle(lg),
 	}
 }
 
@@ -248,8 +251,18 @@ func (p *Puller) twLoop() {
 	}
 }
 
+// If the default service selector and message processing do not meet your needs,
+// you can implement your own way to meet your needs
 func (p *Puller) GetLogger() *Logger {
 	return p.logger
+}
+
+func (p *Puller) SetMessageHandle(mhdle MessageHandle) {
+	p.hdle = mhdle
+}
+
+func (p *Puller) SetServerSelect(ss ServerSelector) {
+	p.selector = ss
 }
 
 func (p *Puller) Pull() {
@@ -272,9 +285,9 @@ func (p *Puller) Pull() {
 
 		p.logger.WithFields(Fields{"message": byteToString(msg.Value), "parition": msg.Partition, "offset": msg.Offset}).Info("Receive Message")
 
-		kmsg := Kmessage{}
+		kmsg := &Kmessage{}
 
-		err := json.Unmarshal(msg.Value, &kmsg)
+		err := json.Unmarshal(msg.Value, kmsg)
 
 		if err != nil {
 
@@ -418,7 +431,7 @@ func (p *Puller) gAurl(cmd string) (string, error) {
 	return p.selector.GetAppUrl(app), nil
 }
 
-func (p *Puller) hmsg(Kmsg Kmessage) error {
+func (p *Puller) hmsg(Kmsg *Kmessage) error {
 
 	url, err := p.gAurl(Kmsg.Cmd)
 
@@ -428,9 +441,7 @@ func (p *Puller) hmsg(Kmsg Kmessage) error {
 
 	p.logger.WithFields(Fields{"logId": Kmsg.LogId, "url": url}).Info("Request info")
 
-	httpRequest := NewHttpRequest(p.logger)
-
-	return httpRequest.Post(url, Kmsg.Data, Kmsg.LogId)
+	return p.hdle.HandleMessage(url, Kmsg)
 }
 
 //Abnormal messages will be saved to zookeeper to help us quickly restore and replay data
