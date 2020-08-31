@@ -1,6 +1,9 @@
 package alpaca
 
-import "unsafe"
+import (
+	"bytes"
+	"unsafe"
+)
 
 func stringToByte(s string) []byte {
 	x := (*[2]uintptr)(unsafe.Pointer(&s))
@@ -10,4 +13,17 @@ func stringToByte(s string) []byte {
 
 func byteToString(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
+}
+
+func AssembleApUrl(pro string, host string, path string) string {
+
+	var url bytes.Buffer
+
+	url.WriteString(pro)
+	url.WriteString(":")
+	url.WriteString("//")
+	url.WriteString(host)
+	url.WriteString(path)
+
+	return url.String()
 }

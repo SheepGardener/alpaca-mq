@@ -19,7 +19,7 @@ func NewHttpRequest(klogger *Logger) *HttpRequest {
 }
 func (h *HttpRequest) Post(url string, data string, LogId string) error {
 
-	bytedate := []byte(data)
+	bytedate := stringToByte(data)
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bytedate))
 

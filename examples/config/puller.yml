@@ -50,6 +50,9 @@ time_wheel_size: 10
 #The offset of the message is automatically submitted time
 offset_ct_time: 1
 
+#Service load balancing strategy, 1: round-robin 2: random available
+load_balance_mode: 1
+
 #Consumer application list
 services:
   - test-app.yml

@@ -1,12 +1,10 @@
 package alpaca
 
 import (
-	"bytes"
 	"container/list"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"sync"
 	"time"
@@ -43,6 +41,8 @@ type Puller struct {
 	ofts       map[int32]int64
 	zksavePath map[int32]string
 	reFlag     bool
+
+	selector Server
 }
 
 func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
@@ -73,6 +73,14 @@ func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
 		lg.Fatalf("Init TimeWheel Failed Err:%s", err)
 	}
 
+	var rs Server
+
+	if cg.LoadBMode == 1 {
+		rs = NewRoundRobin(aplist)
+	} else {
+		rs = NewRandomSelect()
+	}
+
 	return &Puller{
 		topic:        cg.Topic,
 		gname:        cg.GroupName,
@@ -89,6 +97,7 @@ func NewPuller(lg *Logger, cg *GPullerConfig, aplist map[string]App) *Puller {
 		zksavePath:   make(map[int32]string),
 		tw:           tw,
 		reFlag:       false,
+		selector:     rs,
 	}
 }
 
@@ -157,6 +166,8 @@ func (p *Puller) rebalance() {
 	}
 
 	go p.twLoop()
+
+	p.reFlag = false
 }
 
 func (p *Puller) init(pls []int32) {
@@ -404,17 +415,7 @@ func (p *Puller) gAurl(cmd string) (string, error) {
 		return "", errors.New("Not Cmd App Exists")
 	}
 
-	host := app.Servers[rand.Intn(len(app.Servers)-1)]
-
-	var url bytes.Buffer
-
-	url.WriteString(app.Protocol)
-	url.WriteString(":")
-	url.WriteString("//")
-	url.WriteString(host)
-	url.WriteString(app.Path)
-
-	return url.String(), nil
+	return p.selector.GetAppUrl(app), nil
 }
 
 func (p *Puller) hmsg(Kmsg Kmessage) error {

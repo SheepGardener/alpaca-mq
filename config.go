@@ -43,6 +43,7 @@ type GPullerConfig struct {
 	Cmode         int8     `yaml:"msg_consum_mode"`
 	Gpath         string   `yaml:"gpath"`
 	Alist         []string `yaml:"services"`
+	LoadBMode     int8     `yaml:"load_balance_mode"`
 }
 
 type CfgHandle struct {
